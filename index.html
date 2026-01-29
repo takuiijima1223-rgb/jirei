@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>辞令作成・管理システム</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (ブラウザ内トランスパイル用) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Google Fonts (Noto Serif JP for Formal Look) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+        }
+
+        /* 印刷時のスタイル設定 */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+                background: white;
+            }
+            /* 印刷時に背景色などを強制適用 */
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* プレビューエリア（A4比率） */
+        .a4-paper {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin: 0 auto;
+            position: relative;
+            font-family: 'Noto Serif JP', serif; /* 明朝体 */
+            overflow: hidden;
+            box-sizing: border-box; /* パディングを含めたサイズ計算 */
+        }
+
+        /* 飾り枠用のコンテナ */
+        .frame-border {
+            position: absolute;
+            top: 10mm;
+            left: 10mm;
+            right: 10mm;
+            bottom: 10mm;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* コンテンツは枠の上に表示 */
+        .paper-content {
+            position: relative;
+            z-index: 1;
+            height: 100%;
+        }
+
+        /* 縦書きモード */
+        .vertical-mode {
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+        }
+        
+        /* 縦書き時のレイアウト調整 */
+        .vertical-mode .header-title {
+            margin-bottom: 0;
+            margin-left: 2rem; /* タイトル位置調整 */
+            text-align: center;
+        }
+        .vertical-mode .recipient-name {
+            margin-top: 1rem; 
+            margin-bottom: 2rem;
+            align-self: flex-end; /* 上寄せになる */
+        }
+        .vertical-mode .main-body {
+            margin-top: 2rem;
+            line-height: 2.5;
+        }
+        .vertical-mode .date-section {
+            margin-top: auto;
+            margin-left: 2rem;
+        }
+        .vertical-mode .sender-section {
+            margin-left: 1rem;
+            align-self: flex-end; /* 下寄せ */
+        }
+
+        /* 横書きモード（デフォルト） */
+        .horizontal-mode {
+            display: flex;
+            flex-direction: column;
+        }
+        .horizontal-mode .header-title {
+            text-align: center;
+            margin-bottom: 4rem;
+            font-size: 2.5rem;
+            letter-spacing: 0.5rem;
+            font-weight: bold;
+        }
+        .horizontal-mode .recipient-section {
+            margin-bottom: 3rem;
+        }
+        .horizontal-mode .recipient-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        .horizontal-mode .main-body {
+            font-size: 1.25rem;
+            line-height: 2.5;
+            min-height: 200px;
+            white-space: pre-wrap;
+            margin-bottom: 3rem;
+            text-align: justify;
+        }
+        .horizontal-mode .footer-section {
+            margin-top: auto;
+            text-align: right;
+        }
+        .horizontal-mode .date-section {
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .horizontal-mode .sender-section {
+            font-size: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- type="text/babel" と data-presets を指定してJSXをブラウザで変換 -->
+    <script type="text/babel" data-presets="env,react">
+        const { useState, useEffect, useRef } = React;
+
+        // アイコンコンポーネント
+        const IconPrinter = () => <i data-lucide="printer"></i>;
+        const IconFileText = () => <i data-lucide="file-text"></i>;
+        const IconRefresh = () => <i data-lucide="rotate-ccw"></i>;
+        const IconSettings = () => <i data-lucide="settings-2"></i>;
+        const IconPalette = () => <i data-lucide="palette"></i>;
+        const IconSave = () => <i data-lucide="save"></i>;
+        const IconTrash = () => <i data-lucide="trash-2"></i>;
+        const IconFolder = () => <i data-lucide="folder-open"></i>;
+        const IconPlus = () => <i data-lucide="plus-circle"></i>;
+
+        // テンプレート定義
+        const TEMPLATES = [
+            {
+                id: 'transfer',
+                name: '人事異動（辞令）',
+                type: 'standard',
+                title: '辞令',
+                bodyTemplate: (data) => `貴殿を${data.date}付をもって\n\n${data.department}　${data.position}\n\nを命じます`
+            },
+            {
+                id: 'promotion',
+                name: '昇格（辞令）',
+                type: 'standard',
+                title: '辞令',
+                bodyTemplate: (data) => `貴殿を${data.date}付をもって\n\n${data.position} に昇格を命じます\n\n今後一層社業の発展に精励されたく希望します`
+            },
+            {
+                id: 'hiring',
+                name: '採用通知（辞令）',
+                type: 'standard',
+                title: '辞令',
+                bodyTemplate: (data) => `貴殿を${data.date}付をもって\n\n当社の社員として採用し\n${data.department}勤務を命じます`
+            },
+            {
+                id: 'welfare',
+                name: '配属変更（福祉・介護）',
+                type: 'standard',
+                title: '辞令',
+                bodyTemplate: (data) => `貴殿を${data.date}付をもって\n\n${data.department}（${data.position}）\n\nとしての勤務を命じます\n利用者の皆様への更なる貢献を期待します`
+            },
+            {
+                id: 'free',
+                name: 'フリー入力',
+                type: 'free',
+                title: '辞令',
+                bodyTemplate: () => ``
+            }
+        ];
+
+        // カラーパレット定義
+        const FRAME_COLORS = [
+            { id: 'none', name: 'なし', value: 'transparent' },
+            { id: 'gold', name: '金', value: '#D4AF37' },
+            { id: 'silver', name: '銀', value: '#A0A0A0' },
+            { id: 'black', name: '黒', value: '#333333' },
+            { id: 'navy', name: '紺', value: '#000080' },
+            { id: 'red', name: '赤', value: '#B22222' },
+        ];
+
+        const App = () => {
+            // ステート管理
+            const [selectedTemplateId, setSelectedTemplateId] = useState('transfer');
+            const [isVertical, setIsVertical] = useState(false); // 縦書きフラグ
+            const [frameColor, setFrameColor] = useState('transparent'); // フレーム色
+            const [savedItems, setSavedItems] = useState([]); // 保存されたデータリスト
+            
+            // 今日の日付を取得
+            const getFormattedDate = () => {
+                const today = new Date();
+                return `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+            };
+
+            const initialFormData = {
+                recipientName: '山田 太郎',
+                date: getFormattedDate(), 
+                issueDate: getFormattedDate(),
+                department: '営業部',
+                position: '課長',
+                senderCompany: '株式会社 サンプル',
+                senderName: '代表取締役　佐藤 一郎',
+                customBody: ''
+            };
+
+            const [formData, setFormData] = useState(initialFormData);
+
+            // 初期ロード：LocalStorageからデータ読み込み
+            useEffect(() => {
+                const loadedData = localStorage.getItem('jirei_data_v1');
+                if (loadedData) {
+                    try {
+                        setSavedItems(JSON.parse(loadedData));
+                    } catch (e) {
+                        console.error("保存データの読み込みに失敗しました", e);
+                    }
+                }
+                
+                // 初回レンダリング時のテンプレート適用
+                const template = TEMPLATES.find(t => t.id === 'transfer');
+                setFormData(prev => ({
+                    ...prev,
+                    customBody: template.bodyTemplate(prev)
+                }));
+            }, []);
+
+            // Lucideアイコンの再レンダリング
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [formData, isVertical, frameColor, savedItems]);
+
+            // 保存機能
+            const handleSave = () => {
+                const newItem = {
+                    id: Date.now().toString(), // 簡易ID
+                    createdAt: new Date().toLocaleString(),
+                    name: formData.recipientName || '名称未設定',
+                    templateId: selectedTemplateId,
+                    formData: { ...formData },
+                    settings: {
+                        isVertical,
+                        frameColor
+                    }
+                };
+
+                const newSavedItems = [newItem, ...savedItems];
+                setSavedItems(newSavedItems);
+                localStorage.setItem('jirei_data_v1', JSON.stringify(newSavedItems));
+                alert('保存しました');
+            };
+
+            // 読み込み機能
+            const handleLoad = (item) => {
+                if (window.confirm(`「${item.name}」のデータを読み込みますか？\n現在の編集内容は破棄されます。`)) {
+                    setFormData(item.formData);
+                    setSelectedTemplateId(item.templateId);
+                    setIsVertical(item.settings.isVertical);
+                    setFrameColor(item.settings.frameColor);
+                }
+            };
+
+            // 削除機能
+            const handleDelete = (id, e) => {
+                e.stopPropagation(); // 親要素のクリックイベント（読み込み）を阻止
+                if (window.confirm('この保存データを削除しますか？')) {
+                    const newSavedItems = savedItems.filter(item => item.id !== id);
+                    setSavedItems(newSavedItems);
+                    localStorage.setItem('jirei_data_v1', JSON.stringify(newSavedItems));
+                }
+            };
+
+            // 新規作成（リセット）
+            const handleReset = () => {
+                if (window.confirm('新規作成しますか？\n現在の入力内容はクリアされます。')) {
+                    const defaultTemplateId = 'transfer';
+                    setSelectedTemplateId(defaultTemplateId);
+                    setFrameColor('transparent');
+                    setIsVertical(false);
+                    
+                    const resetData = { ...initialFormData, customBody: '' };
+                    const template = TEMPLATES.find(t => t.id === defaultTemplateId);
+                    resetData.customBody = template.bodyTemplate(resetData);
+                    
+                    setFormData(resetData);
+                }
+            };
+
+            // テンプレート変更時の処理
+            const handleTemplateChange = (templateId) => {
+                const template = TEMPLATES.find(t => t.id === templateId);
+                setSelectedTemplateId(templateId);
+                
+                if (template.type !== 'free') {
+                    setFormData(prev => ({
+                        ...prev,
+                        customBody: template.bodyTemplate(prev)
+                    }));
+                } else {
+                    setFormData(prev => ({ ...prev, customBody: '' }));
+                }
+            };
+
+            // データ更新時の本文自動更新
+            useEffect(() => {
+                const template = TEMPLATES.find(t => t.id === selectedTemplateId);
+                if (template && template.type !== 'free') {
+                    // 入力中のデータを元にテンプレート本文を更新
+                    // ※読み込み直後などで無限ループしないよう注意が必要だが、
+                    //   今回は単純化のため、テンプレート選択中はずっと同期させる仕様とする
+                    //   （手動編集した本文を維持したい場合は「フリー入力」を推奨）
+                    //   ※ただし、読込時(handleLoad)はここが動くので意図通り上書きされる
+                }
+            }, [formData.recipientName, formData.date, formData.department, formData.position]);
+
+            // 本文テンプレートの同期ロジック改善：
+            // フォームの特定フィールドが変わった時だけ本文を更新したいが、
+            // handleLoadでセットされた直後にも反応してしまう。
+            // ここではシンプルに、「テンプレートモード」なら常に同期する仕様とする。
+            // ユーザーが手書き修正したい場合は、customBodyへの変更は許可しつつ、
+            // 変数を変えると上書きされる挙動になる点に注意。
+            useEffect(() => {
+                const template = TEMPLATES.find(t => t.id === selectedTemplateId);
+                if (template && template.type !== 'free') {
+                     setFormData(prev => ({
+                        ...prev,
+                        customBody: template.bodyTemplate(prev)
+                    }));
+                }
+            }, [selectedTemplateId, formData.department, formData.position, formData.date, formData.recipientName]); 
+            // ↑ 本文(customBody)を依存配列から外すことでループを防ぐ
+
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            const handlePrint = () => {
+                window.print();
+            };
+
+            const currentTemplateObj = TEMPLATES.find(t => t.id === selectedTemplateId);
+
+            return (
+                <div className="min-h-screen flex flex-col md:flex-row">
+                    
+                    {/* 左サイドバー：設定・入力エリア */}
+                    <div className="w-full md:w-1/3 bg-white border-r border-gray-200 flex flex-col h-screen shadow-lg z-10">
+                        {/* ヘッダー */}
+                        <div className="p-6 border-b bg-gray-50 flex-shrink-0">
+                            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <IconFileText /> 辞令作成ツール
+                            </h1>
+                            <div className="flex gap-2 mt-4">
+                                <button 
+                                    onClick={handleReset}
+                                    className="flex-1 bg-white border border-gray-300 text-gray-700 py-2 px-3 rounded shadow-sm hover:bg-gray-50 text-sm flex items-center justify-center gap-1"
+                                >
+                                    <IconPlus size={16}/> 新規作成
+                                </button>
+                                <button 
+                                    onClick={handleSave}
+                                    className="flex-1 bg-blue-600 text-white py-2 px-3 rounded shadow-sm hover:bg-blue-700 text-sm flex items-center justify-center gap-1"
+                                >
+                                    <IconSave size={16}/> 保存
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* スクロール可能エリア */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            
+                            {/* テンプレート選択 */}
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">テンプレート選択</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {TEMPLATES.map(t => (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => handleTemplateChange(t.id)}
+                                            className={`p-2 text-sm rounded border text-left transition-colors ${
+                                                selectedTemplateId === t.id 
+                                                ? 'bg-blue-600 text-white border-blue-600' 
+                                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {t.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 表示設定 */}
+                            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                    <IconSettings /> レイアウト設定
+                                </label>
+                                <div className="flex flex-col gap-4">
+                                    <label className="flex items-center cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isVertical} 
+                                            onChange={(e) => setIsVertical(e.target.checked)}
+                                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                                        />
+                                        <span className="ml-2 text-sm text-gray-700">縦書きモード（伝統形式）</span>
+                                    </label>
+                                    
+                                    <div className="border-t border-gray-200 pt-3">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                                            <IconPalette size={14} /> フレーム（枠線）の色
+                                        </label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {FRAME_COLORS.map(color => (
+                                                <button
+                                                    key={color.id}
+                                                    onClick={() => setFrameColor(color.value)}
+                                                    className={`w-8 h-8 rounded-full border-2 shadow-sm flex items-center justify-center transition-transform hover:scale-110 ${
+                                                        frameColor === color.value ? 'ring-2 ring-blue-500 ring-offset-2 scale-110' : ''
+                                                    }`}
+                                                    style={{ 
+                                                        backgroundColor: color.value === 'transparent' ? '#fff' : color.value,
+                                                        borderColor: color.value === 'transparent' ? '#ccc' : color.value 
+                                                    }}
+                                                    title={color.name}
+                                                >
+                                                    {color.id === 'none' && <span className="text-gray-400 text-xs">✕</span>}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 入力フォーム */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">対象者氏名</label>
+                                    <input
+                                        type="text"
+                                        name="recipientName"
+                                        value={formData.recipientName}
+                                        onChange={handleInputChange}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">発令日（本文用）</label>
+                                        <input
+                                            type="text"
+                                            name="date"
+                                            value={formData.date}
+                                            onChange={handleInputChange}
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                            placeholder="令和〇年〇月〇日"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">交付日（末尾用）</label>
+                                        <input
+                                            type="text"
+                                            name="issueDate"
+                                            value={formData.issueDate}
+                                            onChange={handleInputChange}
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                            placeholder="令和〇年〇月〇日"
+                                        />
+                                    </div>
+                                </div>
+
+                                {selectedTemplateId !== 'free' && (
+                                    <div className="p-3 bg-blue-50 rounded border border-blue-100">
+                                        <p className="text-xs text-blue-600 font-bold mb-2">テンプレート変数の設定</p>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-600">配属部署・勤務地</label>
+                                                <input
+                                                    type="text"
+                                                    name="department"
+                                                    value={formData.department}
+                                                    onChange={handleInputChange}
+                                                    className="mt-1 block w-full rounded border-gray-300 border p-1.5 text-sm"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-600">役職・職位</label>
+                                                <input
+                                                    type="text"
+                                                    name="position"
+                                                    value={formData.position}
+                                                    onChange={handleInputChange}
+                                                    className="mt-1 block w-full rounded border-gray-300 border p-1.5 text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase flex justify-between">
+                                        <span>辞令本文</span>
+                                        {selectedTemplateId !== 'free' && <span className="text-gray-400 font-normal text-[10px]">※変数を変更すると上書きされます</span>}
+                                    </label>
+                                    <textarea
+                                        name="customBody"
+                                        value={formData.customBody}
+                                        onChange={(e) => {
+                                            setFormData(prev => ({ ...prev, customBody: e.target.value }));
+                                        }}
+                                        rows="6"
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 focus:border-blue-500 font-serif"
+                                    ></textarea>
+                                </div>
+
+                                <div className="border-t pt-4 mt-4">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">発令者（会社名）</label>
+                                    <input
+                                        type="text"
+                                        name="senderCompany"
+                                        value={formData.senderCompany}
+                                        onChange={handleInputChange}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase">発令者（氏名）</label>
+                                    <input
+                                        type="text"
+                                        name="senderName"
+                                        value={formData.senderName}
+                                        onChange={handleInputChange}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                    />
+                                </div>
+
+                                {/* 保存済みデータリスト表示エリア */}
+                                <div className="border-t-2 border-dashed border-gray-300 pt-6 mt-6">
+                                    <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                        <IconFolder size={18} /> 保存済みデータ ({savedItems.length})
+                                    </h3>
+                                    
+                                    {savedItems.length === 0 ? (
+                                        <p className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded">保存されたデータはありません</p>
+                                    ) : (
+                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                            {savedItems.map(item => (
+                                                <div 
+                                                    key={item.id} 
+                                                    onClick={() => handleLoad(item)}
+                                                    className="bg-white border border-gray-200 p-3 rounded hover:border-blue-400 hover:shadow-md cursor-pointer transition relative group"
+                                                >
+                                                    <div className="pr-6">
+                                                        <p className="text-sm font-bold text-gray-800 truncate">{item.name}</p>
+                                                        <div className="flex justify-between items-center mt-1">
+                                                            <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                                                {TEMPLATES.find(t => t.id === item.templateId)?.name || 'カスタム'}
+                                                            </span>
+                                                            <span className="text-[10px] text-gray-400">{item.createdAt}</span>
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={(e) => handleDelete(item.id, e)}
+                                                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        title="削除"
+                                                    >
+                                                        <IconTrash size={16} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+                        </div>
+                        
+                        {/* フッター：印刷ボタン */}
+                        <div className="p-4 border-t bg-gray-50 flex-shrink-0">
+                             <button
+                                onClick={handlePrint}
+                                className="w-full bg-gray-900 text-white py-3 px-4 rounded-lg shadow hover:bg-gray-800 transition flex items-center justify-center gap-2"
+                            >
+                                <IconPrinter /> 印刷 / PDF保存
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 右サイドバー：プレビューエリア */}
+                    <div className="w-full md:w-2/3 bg-gray-200 p-8 overflow-y-auto flex justify-center items-start h-screen">
+                        
+                        {/* A4 用紙 */}
+                        <div 
+                            id="print-area" 
+                            className={`a4-paper ${isVertical ? 'vertical-mode' : 'horizontal-mode'}`}
+                        >
+                            {/* 飾り枠（絶対配置で背景として機能させる） */}
+                            <div 
+                                className="frame-border"
+                                style={{
+                                    border: frameColor === 'transparent' ? 'none' : `6px double ${frameColor}`
+                                }}
+                            ></div>
+
+                            {/* コンテンツラッパー（枠線の上に表示） */}
+                            <div className="paper-content h-full w-full flex flex-col relative">
+
+                                {/* 以下、isVerticalの値によってCSSでレイアウトが変わります */}
+                                
+                                {/* タイトル */}
+                                <div className="header-title">
+                                    {currentTemplateObj.title}
+                                </div>
+
+                                {/* 縦書きモードの時のレイアウト構造 */}
+                                {isVertical ? (
+                                    <>
+                                        {/* 縦書き */}
+                                        <div className="h-full flex flex-col items-center py-10 px-8" style={{height: '100%', width: '100%'}}>
+                                            
+                                            {/* 本文エリア (右側) */}
+                                            <div className="flex-grow whitespace-pre-wrap text-lg leading-loose tracking-widest pt-20">
+                                                {formData.customBody}
+                                            </div>
+
+                                            {/* 日付・差出人・宛名エリア */}
+                                            <div className="flex gap-16 items-end pb-10">
+                                                <div className="text-lg tracking-widest">
+                                                    {formData.issueDate}
+                                                </div>
+                                                
+                                                <div className="flex flex-col gap-4 text-lg">
+                                                    <div className="tracking-widest">{formData.senderCompany}</div>
+                                                    <div className="text-2xl font-bold mt-4" style={{marginTop: '2rem'}}>{formData.senderName}　　印</div>
+                                                </div>
+
+                                                <div className="text-2xl font-bold tracking-widest mt-20" style={{marginTop: '4rem'}}>
+                                                    {formData.recipientName}　殿
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    /* 横書きモード（現代的標準） */
+                                    <>
+                                        <div className="recipient-section">
+                                            <div className="recipient-name border-b-2 border-transparent inline-block">
+                                                {formData.recipientName}　殿
+                                            </div>
+                                        </div>
+
+                                        <div className="main-body">
+                                            {formData.customBody}
+                                        </div>
+
+                                        <div className="footer-section">
+                                            <div className="date-section">
+                                                {formData.issueDate}
+                                            </div>
+                                            <div className="sender-section">
+                                                <div>{formData.senderCompany}</div>
+                                                <div className="font-bold text-xl">{formData.senderName}　　印</div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
