@@ -32,12 +32,12 @@
         }
 
         /* ----------------------------------------------------
-           印刷設定の修正版（絶対配置・サイズ固定）
+           印刷設定の修正版（縮小フィット・フォント最適化）
            ---------------------------------------------------- */
         
         @page {
-            size: A4;
-            margin: 0; /* ブラウザのヘッダーフッターを消すために0にする */
+            size: A4 portrait; /* 縦向き指定 */
+            margin: 0; /* ブラウザのヘッダーフッターを消す */
         }
 
         @media print {
@@ -47,7 +47,6 @@
                 margin: 0;
                 padding: 0;
                 background: white;
-                overflow: hidden; /* はみ出し防止 */
             }
 
             /* 画面上の全要素を非表示 */
@@ -60,31 +59,58 @@
                 visibility: visible;
             }
 
-            /* 印刷エリアを用紙に合わせて強制配置 */
+            /* 印刷エリアを用紙に合わせて配置 */
             #print-area {
-                position: absolute;
+                position: fixed;
                 left: 0;
                 top: 0;
                 width: 210mm;
                 height: 297mm;
                 margin: 0 !important;
-                padding: 25mm !important; /* 安全マージンとして25mm確保 */
+                
+                /* 重要: 余白設定。見切れを防ぐためパディングを調整 */
+                padding: 20mm 25mm !important; 
+                
                 box-sizing: border-box;
                 background: white;
                 z-index: 9999;
                 
-                /* 改ページ対策 */
-                page-break-after: avoid;
-                page-break-inside: avoid;
+                /* 重要: 全体を90%に縮小して、プリンターの余白による見切れを防止 */
+                zoom: 0.9; 
             }
             
-            /* 印刷時のフォント調整 */
-            .horizontal-mode .header-title {
-                margin-bottom: 2rem !important;
+            /* --- 印刷時のフォントサイズ調整 (pt単位で再定義) --- */
+            
+            /* タイトル */
+            .header-title {
+                font-size: 28pt !important; /* 大きく */
+                margin-bottom: 15mm !important;
+                letter-spacing: 5mm !important;
             }
-            .horizontal-mode .main-body {
+
+            /* 宛名 */
+            .recipient-name {
+                font-size: 18pt !important;
+                margin-bottom: 15mm !important;
+            }
+
+            /* 本文 */
+            .main-body {
                 font-size: 14pt !important;
-                line-height: 2 !important;
+                line-height: 2.2 !important;
+                margin-bottom: 20mm !important;
+            }
+
+            /* 日付・署名 */
+            .date-section {
+                font-size: 12pt !important;
+                margin-bottom: 5mm !important;
+            }
+            .sender-section {
+                font-size: 14pt !important;
+            }
+            .sender-section .font-bold {
+                font-size: 16pt !important; /* 代表取締役名 */
             }
         }
         /* ---------------------------------------------------- */
@@ -94,7 +120,7 @@
         .a4-paper {
             width: 210mm;
             min-height: 297mm;
-            padding: 25mm; /* 画面表示も印刷に合わせて25mmに統一 */
+            padding: 25mm; 
             background: white;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             margin: 0 auto;
