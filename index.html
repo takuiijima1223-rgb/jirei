@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -31,13 +32,12 @@
         }
 
         /* ----------------------------------------------------
-           印刷設定の強化（ここを重点的に修正しました）
+           印刷設定の修正版（絶対配置・サイズ固定）
            ---------------------------------------------------- */
         
-        /* A4サイズ指定とブラウザデフォルト余白の削除 */
         @page {
             size: A4;
-            margin: 0;
+            margin: 0; /* ブラウザのヘッダーフッターを消すために0にする */
         }
 
         @media print {
@@ -47,6 +47,7 @@
                 margin: 0;
                 padding: 0;
                 background: white;
+                overflow: hidden; /* はみ出し防止 */
             }
 
             /* 画面上の全要素を非表示 */
@@ -59,20 +60,31 @@
                 visibility: visible;
             }
 
-            /* 印刷エリアを紙の左上に強制配置 */
+            /* 印刷エリアを用紙に合わせて強制配置 */
             #print-area {
-                position: fixed; /* absoluteからfixedに変更し、スクロール位置の影響を排除 */
+                position: absolute;
                 left: 0;
                 top: 0;
                 width: 210mm;
                 height: 297mm;
                 margin: 0 !important;
-                padding: 20mm !important; /* 紙の余白設定（ここで調整） */
-                box-shadow: none;
-                background: white;
+                padding: 25mm !important; /* 安全マージンとして25mm確保 */
                 box-sizing: border-box;
+                background: white;
                 z-index: 9999;
-                overflow: hidden; /* はみ出し防止 */
+                
+                /* 改ページ対策 */
+                page-break-after: avoid;
+                page-break-inside: avoid;
+            }
+            
+            /* 印刷時のフォント調整 */
+            .horizontal-mode .header-title {
+                margin-bottom: 2rem !important;
+            }
+            .horizontal-mode .main-body {
+                font-size: 14pt !important;
+                line-height: 2 !important;
             }
         }
         /* ---------------------------------------------------- */
@@ -82,14 +94,14 @@
         .a4-paper {
             width: 210mm;
             min-height: 297mm;
-            padding: 20mm;
+            padding: 25mm; /* 画面表示も印刷に合わせて25mmに統一 */
             background: white;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             margin: 0 auto;
             position: relative;
             font-family: 'Noto Serif JP', serif; /* 明朝体 */
             overflow: hidden;
-            box-sizing: border-box; /* パディングを含めたサイズ計算 */
+            box-sizing: border-box;
         }
 
         /* 飾り枠用のコンテナ */
